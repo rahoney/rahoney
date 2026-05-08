@@ -1,20 +1,21 @@
 name: GitHub-Profile-3D-Contrib
 
 on:
-  schedule: # 00:00 UTC에 매일 자동 실행
+  schedule:
     - cron: "0 0 * * *"
-  workflow_dispatch: # 내가 원할 때 수동으로도 실행 가능
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
     name: generate-github-profile-3d-contrib
     steps:
-      - uses: actions/checkout@v3
-      - uses: yoshi389111/github-profile-3d-contrib@0.7.1
+      - uses: actions/checkout@v4  # v3에서 v4로 업데이트
+      - uses: yoshi389111/github-profile-3d-contrib@0.7.1 # 이 라이브러리가 업데이트될 때까지 기다리거나 아래 환경변수 추가
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           USERNAME: ${{ github.repository_owner }}
+          FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true # 강제로 Node 24에서 실행하게 만듦
       - name: Commit & Push
         run: |
           git config user.name github-actions
