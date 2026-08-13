@@ -2,24 +2,45 @@ name: GitHub-Profile-3D-Contrib
 
 on:
   schedule:
-    - cron: "0 15 * * *" # 매일 한국 시간 밤 12시에 실행
+    - cron: "0 15 * * *" # 매일 한국 시간 밤 12시
   workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: github-profile-3d-contrib
+  cancel-in-progress: true
 
 jobs:
   build:
     runs-on: ubuntu-latest
     name: generate-github-profile-3d-contrib
+
     steps:
-      - uses: actions/checkout@v4  # v3에서 v4로 업데이트
-      - uses: yoshi389111/github-profile-3d-contrib@0.7.1 # 이 라이브러리가 업데이트될 때까지 기다리거나 아래 환경변수 추가
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - uses: yoshi389111/github-profile-3d-contrib@v0.9.3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           USERNAME: ${{ github.repository_owner }}
-          FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true # 강제로 Node 24에서 실행하게 만듦
+
       - name: Commit & Push
         run: |
           git config user.name github-actions
           git config user.email github-actions@github.com
+
           git add -A .
+
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+
           git commit -m "generated"
-          git push
+
+          git pull --rebase origin main
+          git push origin HEAD:main
