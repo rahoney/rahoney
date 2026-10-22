@@ -2,45 +2,51 @@ name: GitHub-Profile-3D-Contrib
 
 on:
   schedule:
-    - cron: "0 15 * * *" # 매일 한국 시간 밤 12시
+    - cron: "0 15 * * *" # 00:00 KST; scheduled runs may be delayed by GitHub.
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - scripts/profile-stats/**
+      - .github/workflows/profile-3d.yml
 
 permissions:
   contents: write
 
 concurrency:
   group: github-profile-3d-contrib
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    name: generate-github-profile-3d-contrib
-
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v7
+      # GitHub's official checkout, pinned to its verified v7 commit.
+      # It receives only the repository-scoped built-in GITHUB_TOKEN.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: main
-          fetch-depth: 0
+          fetch-depth: 1
 
-      - uses: yoshi389111/github-profile-3d-contrib@v0.9.3
+      - name: Test local statistics generator
+        run: node --test scripts/profile-stats/generate.test.mjs
+
+      - name: Generate profile with local code
+        run: node scripts/profile-stats/generate.mjs
         env:
-          GITHUB_TOKEN: ${{ secrets.PROFILE_STATS_TOKEN }}
+          PROFILE_STATS_TOKEN: ${{ secrets.PROFILE_STATS_TOKEN }}
           USERNAME: ${{ github.repository_owner }}
 
-      - name: Commit & Push
+      - name: Commit generated profile images
         run: |
-          git config user.name github-actions
-          git config user.email github-actions@github.com
-
-          git add -A .
-
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- profile-3d-contrib/profile-green-animate.svg profile-3d-contrib/profile-green.svg
           if git diff --cached --quiet; then
             echo "No changes to commit."
             exit 0
           fi
-
-          git commit -m "generated"
-
+          git commit -m "Update self-hosted profile statistics"
           git pull --rebase origin main
           git push origin HEAD:main
