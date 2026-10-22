@@ -113,3 +113,16 @@ test('rejects authentication errors and invalid usernames before publishing', as
   await assert.rejects(collectStats('secret', '../bad', fetcher), /username/);
   await assert.rejects(queryGitHub('', 'query Test { viewer { login } }', {}, fetcher), /missing/);
 });
+
+test('reports repository access scope without retaining token contents', async () => {
+  const fetcher = async (_url, options) => ({
+    ok: true,
+    headers: new Map([['x-oauth-scopes', 'read:user, repo']]),
+    json: async () => ({ data: { user: JSON.parse(options.body).query.includes('query Profile')
+      ? { contributionsCollection: collection() }
+      : { repositories: { nodes: [], pageInfo: { hasNextPage: false } } } } }),
+  });
+  const stats = await collectStats('do-not-retain-this-secret', 'rahoney', fetcher);
+  assert.equal(stats.repositoryScope, true);
+  assert.doesNotMatch(JSON.stringify(stats), /do-not-retain-this-secret/);
+});

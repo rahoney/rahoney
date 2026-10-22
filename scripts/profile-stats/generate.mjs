@@ -33,7 +33,7 @@ const REPOS_QUERY = `query Repositories($login: String!, $after: String) {
   }
 }`;
 
-export async function queryGitHub(token, query, variables, fetcher = fetch) {
+export async function queryGitHub(token, query, variables, fetcher = fetch, inspectHeaders = () => {}) {
   if (!token) throw new Error('PROFILE_STATS_TOKEN is missing.');
   const response = await fetcher(ENDPOINT, {
     method: 'POST', redirect: 'error', signal: AbortSignal.timeout(30_000),
@@ -45,6 +45,7 @@ export async function queryGitHub(token, query, variables, fetcher = fetch) {
   });
   // Do not print response bodies: GraphQL errors can contain private details.
   if (!response.ok) throw new Error(`GitHub API returned HTTP ${response.status}.`);
+  inspectHeaders(response.headers);
   const result = await response.json();
   if (result.errors?.length || !result.data?.user) {
     throw new Error('GitHub statistics query failed. Check token permissions and username.');
@@ -94,8 +95,15 @@ export function aggregate(collection, username) {
 
 export async function collectStats(token, username, fetcher = fetch) {
   if (!/^[a-z\d][a-z\d-]{0,38}$/i.test(username || '')) throw new Error('Invalid GitHub username.');
-  const user = await queryGitHub(token, PROFILE_QUERY, { login: username }, fetcher);
+  let repositoryScope = null;
+  const user = await queryGitHub(token, PROFILE_QUERY, { login: username }, fetcher, headers => {
+    const scopes = headers?.get('x-oauth-scopes');
+    if (scopes !== undefined && scopes !== null) {
+      repositoryScope = scopes.split(',').map(scope => scope.trim()).includes('repo');
+    }
+  });
   const stats = aggregate(user.contributionsCollection, username);
+  stats.repositoryScope = repositoryScope;
   let after = null;
   const cursors = new Set();
   for (let page = 0; page < 100; page++) {
@@ -124,6 +132,11 @@ function calendarSvg(stats, animated) {
   const first = Date.parse(stats.days[0].date);
   const firstWeekday = new Date(first).getUTCDay();
   const origin = first - firstWeekday * 86400000;
+  // Match the original 30-degree isometric view: show more of each day's top face.
+  const horizontalStep = 19;
+  const verticalStep = horizontalStep * Math.tan(Math.PI / 6);
+  const tileHalfWidth = 17;
+  const tileHalfHeight = tileHalfWidth * Math.tan(Math.PI / 6);
   const colors = {
     NONE: ['#eff3ec', '#d4dfd0', '#b9cab5'],
     FIRST_QUARTILE: ['#c5e6a4', '#9fc778', '#81aa5c'],
@@ -135,15 +148,15 @@ function calendarSvg(stats, animated) {
     const date = new Date(day.date);
     const week = Math.floor((date.getTime() - origin) / 604800000);
     const weekday = date.getUTCDay();
-    const x = 145 + (week - weekday) * 19;
-    const y = 188 + (week + weekday) * 8.4;
+    const x = 145 + (week - weekday) * horizontalStep;
+    const y = 138 + (week + weekday) * verticalStep;
     const h = 3 + Math.log10(1 + day.count / 20) * 115;
     const [top, left, right] = colors[day.level] || colors.NONE;
     const topY = y - h;
     return `<g class="${animated ? 'bar' : ''}"><title>${escapeXml(day.date)}: ${day.count} contributions</title>` +
-      polygon([[x, topY], [x + 17, topY - 7.5], [x + 34, topY], [x + 17, topY + 7.5]], `fill="${top}"`) +
-      polygon([[x, topY], [x + 17, topY + 7.5], [x + 17, y + 7.5], [x, y]], `fill="${left}"`) +
-      polygon([[x + 17, topY + 7.5], [x + 34, topY], [x + 34, y], [x + 17, y + 7.5]], `fill="${right}"`) + '</g>';
+      polygon([[x, topY], [x + tileHalfWidth, topY - tileHalfHeight], [x + 2 * tileHalfWidth, topY], [x + tileHalfWidth, topY + tileHalfHeight]], `fill="${top}"`) +
+      polygon([[x, topY], [x + tileHalfWidth, topY + tileHalfHeight], [x + tileHalfWidth, y + tileHalfHeight], [x, y]], `fill="${left}"`) +
+      polygon([[x + tileHalfWidth, topY + tileHalfHeight], [x + 2 * tileHalfWidth, topY], [x + 2 * tileHalfWidth, y], [x + tileHalfWidth, y + tileHalfHeight]], `fill="${right}"`) + '</g>';
   }).join('');
 }
 
@@ -231,6 +244,8 @@ export async function main() {
   await writeFile(`${OUTPUT}/profile-green-animate.svg`, animated, 'utf8');
   await writeFile(`${OUTPUT}/profile-green.svg`, still, 'utf8');
   console.log(`Generated profile: ${stats.total} contributions, ${stats.commits} commits; ${stats.unclassified} unclassified language contributions.`);
+  const access = stats.repositoryScope === null ? 'not reported' : stats.repositoryScope ? 'present' : 'absent';
+  console.log(`Classic token repo scope: ${access}; ${stats.languages.length} languages classified.`);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
