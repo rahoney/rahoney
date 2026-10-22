@@ -126,3 +126,16 @@ test('reports repository access scope without retaining token contents', async (
   assert.equal(stats.repositoryScope, true);
   assert.doesNotMatch(JSON.stringify(stats), /do-not-retain-this-secret/);
 });
+
+test('shows one total and percentage breakdowns without empty issue axes', () => {
+  const stats = aggregate(collection(), 'rahoney');
+  const svg = renderSvg(stats);
+  const visibleText = [...svg.matchAll(/<text[^>]*>([^<]*)<\/text>/g)].map(match => match[1]);
+  assert.equal(visibleText.filter(value => value === '15 contributions').length, 1);
+  assert.ok(!visibleText.includes('12'));
+  assert.ok(!visibleText.includes('Issues'));
+  assert.ok(visibleText.includes('CONTRIBUTION MIX'));
+  assert.ok(visibleText.includes('80.0%'));
+  stats.total = 16;
+  assert.match(renderSvg(stats), /Other contributions/);
+});

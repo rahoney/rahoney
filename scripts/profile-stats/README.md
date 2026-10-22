@@ -19,6 +19,14 @@ GitHub's official checkout action uses the repository-scoped built-in token;
   Aggregated language names and counts are public in the generated images.
 - Stars and forks are summed over all accessible repositories owned by the profile account.
 
+## Display
+
+Only the footer shows the overall contribution total. The contribution mix uses horizontal
+bars and percentages of **all contributions**, omitting zero-count categories.
+The language donut and legend show percentages of **commit contributions** only,
+so its smaller denominator is not presented as a competing overall total.
+Unattributed contribution categories are grouped as `Other contributions`.
+
 ## Token and write boundaries
 
 The only network destination in the local script is `https://api.github.com/graphql`.

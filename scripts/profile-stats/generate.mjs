@@ -160,29 +160,28 @@ function calendarSvg(stats, animated) {
   }).join('');
 }
 
-function radarSvg(stats) {
-  const values = [stats.commits, stats.issues, stats.pullRequests, stats.reviews, stats.repositories];
-  const labels = ['Commit', 'Issue', 'Pull request', 'Review', 'Repository'];
-  const center = [1015, 224];
-  const radius = 125;
-  const at = (index, fraction) => {
-    const angle = -Math.PI / 2 + index * Math.PI * 2 / 5;
-    return [center[0] + Math.cos(angle) * radius * fraction, center[1] + Math.sin(angle) * radius * fraction];
-  };
-  const maximum = Math.max(10, ...values);
-  let result = '';
-  for (const fraction of [0.25, 0.5, 0.75, 1]) {
-    result += polygon(values.map((_, i) => at(i, fraction)), 'fill="none" stroke="#d9e4d6" stroke-width="1"');
-  }
-  values.forEach((value, i) => {
-    const [x, y] = at(i, 1.3);
-    const endpoint = at(i, 1);
-    result += `<path d="M${center.join(',')} L${endpoint.map(n).join(',')}" stroke="#d9e4d6"/>`;
-    result += text(n(x), n(y), labels[i], 'text-anchor="middle" font-size="16"');
-    result += text(n(x), n(y + 22), number(value), 'text-anchor="middle" font-size="16" font-weight="700"');
+function contributionBarsSvg(stats) {
+  const rows = [
+    { label: 'Commits', count: stats.commits, color: '#318638' },
+    { label: 'Pull requests', count: stats.pullRequests, color: '#72ad69' },
+    { label: 'Repositories created', count: stats.repositories, color: '#6b94aa' },
+    { label: 'Reviews', count: stats.reviews, color: '#b29a64' },
+    { label: 'Issues', count: stats.issues, color: '#a088a6' },
+  ];
+  const known = rows.reduce((sum, row) => sum + row.count, 0);
+  if (stats.total > known) rows.push({ label: 'Other contributions', count: stats.total - known, color: '#a7b4aa' });
+  const active = rows.filter(row => row.count > 0);
+  let result = text(840, 103, 'CONTRIBUTION MIX', 'font-size="14" letter-spacing="1" fill="#5f7261"');
+  result += text(840, 127, 'Share of all contributions', 'font-size="15" fill="#5f7261"');
+  if (!stats.total) return result + text(840, 175, 'No contributions yet', 'font-size="18"');
+  active.forEach((row, i) => {
+    const y = 165 + i * 48;
+    const percentage = row.count / stats.total * 100;
+    result += text(840, y, row.label, 'font-size="17"');
+    result += text(1210, y, `${percentage.toFixed(1)}%`, 'font-size="17" text-anchor="end" font-weight="600"');
+    result += `<rect x="840" y="${y + 10}" width="370" height="8" rx="4" fill="#edf2ec"/>`;
+    result += `<rect x="840" y="${y + 10}" width="${n(Math.min(370, percentage * 3.7))}" height="8" rx="4" fill="${row.color}"/>`;
   });
-  result += polygon(values.map((value, i) => at(i, Math.log10(value + 1) / Math.log10(maximum + 1))),
-    'fill="#48a249" fill-opacity="0.28" stroke="#318638" stroke-width="2"');
   return result;
 }
 
@@ -210,18 +209,18 @@ function pieSvg(stats) {
     const y = 588 + i * 27;
     result += `<rect x="310" y="${y - 13}" width="14" height="14" rx="3" fill="${slice.color}"/>`;
     result += text(335, y, slice.name, 'font-size="17"');
-    result += text(620, y, `${number(slice.count)} · ${(fraction * 100).toFixed(1)}%`, 'font-size="15" text-anchor="end" fill="#5f7261"');
+    result += text(620, y, `${(fraction * 100).toFixed(1)}%`, 'font-size="15" text-anchor="end" fill="#5f7261"');
   });
   result += '<circle cx="180" cy="673" r="57" fill="white"/>';
-  result += text(180, 670, number(stats.commits), 'font-size="25" text-anchor="middle" font-weight="700"');
-  result += text(180, 692, 'commits', 'font-size="14" text-anchor="middle" fill="#5f7261"');
+  result += text(180, 671, 'Languages', 'font-size="18" text-anchor="middle" font-weight="600"');
+  result += text(180, 693, 'share', 'font-size="14" text-anchor="middle" fill="#5f7261"');
   return result;
 }
 
 export function renderSvg(stats, animated = true) {
   const from = stats.days[0].date;
   const to = stats.days.at(-1).date;
-  const description = `${stats.username}: ${stats.total} contributions, ${stats.commits} commits, ${from} to ${to}. Language counts use repository primary language; ${stats.unclassified} commits have unavailable language data.`;
+  const description = `${stats.username}: ${stats.total} total contributions, ${from} to ${to}. Contribution categories are shown as shares of the total. Language shares use commits grouped by repository primary language; unavailable language data is labeled Unclassified.`;
   return `<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="850" viewBox="0 0 1280 850" role="img" aria-labelledby="title description">
 <title id="title">${escapeXml(stats.username)} · GitHub contributions</title>
 <desc id="description">${escapeXml(description)}</desc>
@@ -229,7 +228,7 @@ export function renderSvg(stats, animated = true) {
 <rect width="1280" height="850" fill="white"/>
 ${text(40, 43, `${stats.username} / contributions`, 'font-size="24" font-weight="600"')}
 ${text(1240, 39, `${from} / ${to}`, 'font-size="14" text-anchor="end" fill="#5f7261"')}
-${calendarSvg(stats, animated)}${radarSvg(stats)}${pieSvg(stats)}
+${calendarSvg(stats, animated)}${contributionBarsSvg(stats)}${pieSvg(stats)}
 ${text(640, 814, `${number(stats.total)} contributions`, 'font-size="30" text-anchor="middle" font-weight="700"')}
 ${text(1240, 814, `Stars ${number(stats.stars)} · Forks ${number(stats.forks)}`, 'font-size="17" text-anchor="end"')}
 </svg>\n`;
